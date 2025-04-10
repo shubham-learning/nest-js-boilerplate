@@ -7,8 +7,14 @@ import {
   Param,
   HttpCode,
   HttpStatus,
-  ConflictException,
+  Res,
+  InternalServerErrorException,
+  ValidationPipe,
+  UsePipes,
+  ParseIntPipe,
+  ParseUUIDPipe,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -19,33 +25,62 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
+  @UsePipes(new ValidationPipe({ transform: true })) // Enable auto-transformation
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() createUserDto: CreateUserDto): Promise<User> {
-    return this.userService.create(createUserDto);
+    try {
+      return this.userService.create(createUserDto);
+    } catch (error) {
+      throw new InternalServerErrorException(
+        error instanceof Error ? error.message : 'Something went wrong',
+      );
+    }
   }
 
   @Get()
-  async findAll(): Promise<User[]> {
-    return this.userService.findAll();
+  async findAll(@Res({ passthrough: true }) res: Response): Promise<User[]> {
+    try {
+      const response = await this.userService.findAll();
+      const { users, count } = response;
+
+      res.setHeader('x-total-count', count);
+
+      return users;
+    } catch (error) {
+      throw new InternalServerErrorException(
+        error instanceof Error ? error.message : 'Something went wrong',
+      );
+    }
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.userService.findOne(+id);
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    try {
+      return this.userService.findOne(id);
+    } catch (error) {
+      throw new InternalServerErrorException(
+        error instanceof Error ? error.message : 'Something went wrong',
+      );
+    }
   }
 
-  @Patch(':id')
+  @Patch(':publicId')
+  @HttpCode(HttpStatus.NO_CONTENT)
   async update(
-    @Param('id') id: string,
+    @Param('publicId', ParseUUIDPipe) publicId: string,
     @Body() updateUserDto: UpdateUserDto,
-  ): Promise<User> {
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
     try {
-      return await this.userService.update(+id, updateUserDto);
-    } catch (error) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      if (error.code === '23505') throw new ConflictException('Duplicate Data');
+      await this.userService.update(publicId, updateUserDto);
 
-      throw error;
+      res
+        .setHeader('x-message', 'User updated successfully')
+        .setHeader('x-public-id', publicId);
+    } catch (error) {
+      throw new InternalServerErrorException(
+        error instanceof Error ? error.message : 'Something went wrong',
+      );
     }
   }
 }

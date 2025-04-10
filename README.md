@@ -44,6 +44,23 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+## Create Migration and run migration
+
+```bash
+# create migration file
+$ npm run migration:generate -- db/migrations/{migrationFileName}
+
+# 
+$ npm run migration:run
+```
+
+## Create Module resource with all 
+
+```bash
+# create user module
+$ nest g resource user
+```
+
 ## Run tests
 
 ```bash

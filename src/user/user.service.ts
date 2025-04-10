@@ -17,37 +17,39 @@ export class UserService {
     return await this.usersRepository.save(createUserDto);
   }
 
-  async findAll(): Promise<User[]> {
-    return await this.usersRepository.find();
+  async findAll(): Promise<{ users: User[]; count: number }> {
+    const [users, count] = await this.usersRepository.findAndCount();
+    return { users, count };
   }
 
   async findOne(id: number): Promise<User | null> {
     return await this.usersRepository.findOneBy({ id });
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
+  async update(publicId: string, updateUserDto: UpdateUserDto): Promise<void> {
     const queryRunner = this.dataSource.createQueryRunner();
 
     await queryRunner.connect();
     await queryRunner.startTransaction();
-
     try {
-      const user = await this.usersRepository.findOneBy({ id });
+      const user = await queryRunner.manager.findOne(User, {
+        where: { publicId },
+        select: ['id'],
+      });
 
       if (!user) {
-        throw new NotFoundException(`User with ID ${id} not found`);
+        throw new NotFoundException(
+          `User with public ID ${publicId} not found`,
+        );
       }
 
-      // Merge changes with existing user
-      const updatedUser = this.usersRepository.merge(user, updateUserDto);
+      await queryRunner.manager.update(User, { id: user.id }, updateUserDto);
 
-      return await this.usersRepository.save(updatedUser);
+      await queryRunner.commitTransaction();
     } catch (err) {
-      // since we have errors lets rollback the changes we made
       await queryRunner.rollbackTransaction();
       throw err;
     } finally {
-      // you need to release a queryRunner which was manually instantiated
       await queryRunner.release();
     }
   }

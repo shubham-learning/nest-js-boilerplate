@@ -1,16 +1,48 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  DeleteDateColumn,
+  Index,
+} from 'typeorm';
+import { DBType } from 'utils/constant';
 
-@Entity()
+@Index('IDX_USER_NAME', ['name'])
+@Entity('user')
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  firstName: string;
+  @Column({
+    name: 'public_id',
+    type: DBType.UUID,
+    default: () => 'uuid_generate_v4()',
+  })
+  publicId: string;
 
-  @Column()
-  lastName: string;
+  @Column({ unique: true, nullable: false })
+  email: string;
 
-  @Column({ default: true })
+  @Column({ nullable: true })
+  name: string;
+
+  @Column({ nullable: false })
+  password: string;
+
+  @Column({ nullable: false, length: 255 })
+  salt: string;
+
+  @Column({ name: 'is_active', default: true })
   isActive: boolean;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt: Date;
 }

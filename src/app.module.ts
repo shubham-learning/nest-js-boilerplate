@@ -1,28 +1,12 @@
 import { Module } from '@nestjs/common';
-// import { AppController } from './app.controller';
-// import { AppService } from './app.service';
 import { UserModule } from './user/user.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
-// import { User } from './user/entities/user.entity';
 import { DataSource } from 'typeorm';
+import { dataSourceOptions } from 'db/data-source';
+import { AuthModule } from './auth/auth.module';
 
-// Decorator
 @Module({
-  imports: [
-    UserModule,
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres',
-      password: 'postgres',
-      database: 'test_nest',
-      entities: ['dist/**/*.entity{.ts, .js}'],
-      retryAttempts: 10,
-      retryDelay: 300,
-      autoLoadEntities: true,
-    }),
-  ],
+  imports: [TypeOrmModule.forRoot(dataSourceOptions), AuthModule, UserModule],
 })
 export class AppModule {
   constructor(private dataSource: DataSource) {}
