@@ -1,9 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { DataSource, Repository } from 'typeorm';
+import {
+  FindAllResponse,
+  SaveResponse,
+  FindOneResponse,
+} from 'utils/common/interfaces/api-response.interface';
 
 @Injectable()
 export class UserService {
@@ -13,17 +18,22 @@ export class UserService {
     private dataSource: DataSource,
   ) {}
 
-  async create(createUserDto: CreateUserDto): Promise<User> {
-    return await this.usersRepository.save(createUserDto);
+  async create(createUserDto: CreateUserDto): Promise<SaveResponse> {
+    const user = await this.usersRepository.save(createUserDto);
+    return { data: { publicId: user.publicId } };
   }
 
-  async findAll(): Promise<{ users: User[]; count: number }> {
-    const [users, count] = await this.usersRepository.findAndCount();
-    return { users, count };
+  async findAll(): Promise<FindAllResponse<User>> {
+    const [users, count] = await this.usersRepository.findAndCount({
+      order: { id: 'DESC' },
+    });
+    return { data: users, count };
   }
 
-  async findOne(id: number): Promise<User | null> {
-    return await this.usersRepository.findOneBy({ id });
+  async findOne(publicId: string): Promise<FindOneResponse<User>> {
+    const user = await this.usersRepository.findOneBy({ publicId });
+
+    return { data: user };
   }
 
   async update(publicId: string, updateUserDto: UpdateUserDto): Promise<void> {
@@ -38,8 +48,14 @@ export class UserService {
       });
 
       if (!user) {
-        throw new NotFoundException(
-          `User with public ID ${publicId} not found`,
+        throw new HttpException(
+          [
+            {
+              name: 'user-public-id',
+              message: `User with public ID ${publicId} not found custom`,
+            },
+          ],
+          HttpStatus.BAD_REQUEST,
         );
       }
 

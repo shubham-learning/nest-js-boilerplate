@@ -1,27 +1,12 @@
-import {
-  IsString,
-  IsEmail,
-  MinLength,
-  MaxLength,
-  Matches,
-  IsNotEmpty,
-} from 'class-validator';
+import { IsString, IsEmail, IsNotEmpty, MinLength } from 'class-validator';
 
 export class CreateUserDto {
-  @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Parameter: name is required.' })
+  @IsString({ message: 'Please enter valid name' })
+  @MinLength(9, { message: 'Name must be at least 9 characters long.' })
   name: string;
 
-  @IsEmail()
-  @IsNotEmpty()
+  @IsEmail({}, { message: 'Please provide a valid email address.' })
+  @IsNotEmpty({ message: 'Parameter: email is required.' })
   email: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MinLength(8)
-  @MaxLength(32)
-  @Matches(/(?:(?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
-    message: 'Password too weak',
-  })
-  password: string;
 }

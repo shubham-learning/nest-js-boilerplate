@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner, Table } from 'typeorm';
+import { MigrationInterface, QueryRunner, Table, TableUnique } from 'typeorm';
 import { DBType } from 'utils/constant';
 
 export class CreateUser1743845281494 implements MigrationInterface {
@@ -34,17 +34,6 @@ export class CreateUser1743845281494 implements MigrationInterface {
             isNullable: true,
           },
           {
-            name: 'password',
-            type: DBType.VARCHAR,
-            isNullable: false,
-          },
-          {
-            name: 'salt',
-            type: DBType.VARCHAR,
-            length: '64',
-            isNullable: false,
-          },
-          {
             name: 'is_active',
             type: DBType.BOOLEAN,
             default: true,
@@ -71,6 +60,12 @@ export class CreateUser1743845281494 implements MigrationInterface {
             columnNames: ['name'],
             isUnique: false,
           },
+        ],
+        uniques: [
+          new TableUnique({
+            name: 'UQ_USER_EMAIL',
+            columnNames: ['email'],
+          }),
         ],
       }),
       true,

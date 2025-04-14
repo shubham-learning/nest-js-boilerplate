@@ -28,12 +28,6 @@ export class User {
   @Column({ nullable: true })
   name: string;
 
-  @Column({ nullable: false })
-  password: string;
-
-  @Column({ nullable: false, length: 255 })
-  salt: string;
-
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
