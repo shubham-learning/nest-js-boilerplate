@@ -12,7 +12,7 @@ import { QueryFailedError } from 'typeorm';
 interface Errors {
   name: string;
   message: string;
-  description?: any;
+  description?: string;
 }
 
 interface ErrorResponse {
@@ -37,42 +37,46 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message: string | object = 'Internal server error';
-    let stack: string | undefined;
+    let errorsDetails: string | object;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
 
       if (this.isHttpExceptionResponse(exceptionResponse)) {
-        message = this.hasMessage(exceptionResponse)
+        errorsDetails = this.hasMessage(exceptionResponse)
           ? exceptionResponse.message
           : exceptionResponse;
       } else {
-        message = exceptionResponse;
+        errorsDetails = exceptionResponse;
       }
-
-      stack = exception.stack;
     } else if (exception instanceof QueryFailedError) {
-      status = HttpStatus.INTERNAL_SERVER_ERROR;
-      message = {
+      errorsDetails = {
         name: 'database-error',
         message: exception.message,
+        description: (exception.driverError as { detail?: string })?.detail,
       };
-
-      stack = exception.stack;
     } else if (exception instanceof Error) {
-      message = exception.message;
-      stack = exception.stack;
+      errorsDetails = exception.message;
     } else {
-      message = String(exception);
+      errorsDetails = String(exception);
     }
 
-    this.logError(request, status, message, stack);
+    this.logError(request, status, errorsDetails, exception);
 
     const errorResponse: ErrorResponse = {
       statusCode: status,
-      errors: this.normalizeMessage(message),
+      errors:
+        status >= HttpStatus.INTERNAL_SERVER_ERROR
+          ? [
+              {
+                name: 'unexpected-server-error',
+                message: 'Something Went Wrong. Please try after some times',
+                description:
+                  'Please contact administrator and present correlation identifier for troubleshooting',
+              },
+            ]
+          : this.normalizeMessage(errorsDetails),
       timestamp: new Date().toISOString(),
       path: request.url,
     };
@@ -95,38 +99,54 @@ export class HttpExceptionFilter implements ExceptionFilter {
   private normalizeMessage(message: string | object): Array<Errors> {
     const errors: Array<Errors> = [];
 
-    const processErrorObject = (obj: Record<string, unknown>) => {
-      if (Array.isArray(obj.errors)) {
-        obj.errors.forEach((error) => processUnknownError(error));
-      } else if (
-        typeof obj.name === 'string' &&
-        typeof obj.message === 'string'
-      ) {
-        errors.push({
-          name: obj.name,
-          message: obj.message,
-          description: obj?.description,
-        });
-      } else {
-        errors.push({ name: 'error', message: JSON.stringify(obj) });
+    const isErrorObject = (
+      obj: unknown,
+    ): obj is { name: string; message: string; description?: unknown } =>
+      typeof obj === 'object' &&
+      obj !== null &&
+      'name' in obj &&
+      'message' in obj;
+
+    const processError = (error: unknown): void => {
+      switch (true) {
+        case typeof error === 'string':
+          errors.push({ name: 'error', message: error });
+          break;
+
+        case Array.isArray(error):
+          error.forEach((item) => processError(item));
+          break;
+
+        case isErrorObject(error):
+          errors.push({
+            name: error.name,
+            message: error.message,
+            description:
+              typeof error.description === 'string'
+                ? error.description
+                : undefined,
+          });
+          break;
+
+        case error instanceof Error:
+          errors.push({
+            name: error.name || 'error',
+            message: error.message,
+          });
+          break;
+
+        default:
+          errors.push({
+            name: 'error',
+            message: JSON.stringify(error, (_, value) =>
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+              value instanceof Error ? value.stack : value,
+            ),
+          });
       }
     };
 
-    // 2. Main processor function (defined last)
-    const processUnknownError = (error: unknown) => {
-      if (typeof error === 'string') {
-        errors.push({ name: 'error', message: error });
-      } else if (Array.isArray(error)) {
-        error.forEach((item) => processUnknownError(item));
-      } else if (error && typeof error === 'object') {
-        processErrorObject(error as Record<string, unknown>);
-      } else {
-        errors.push({ name: 'error', message: String(error) });
-      }
-    };
-
-    // 3. Start processing
-    processUnknownError(message);
+    processError(message);
 
     return errors.length > 0
       ? errors
@@ -136,18 +156,32 @@ export class HttpExceptionFilter implements ExceptionFilter {
   private logError(
     request: Request,
     status: number,
-    message: string | object,
-    stack?: string,
-    exception?: object,
+    errors: string | object,
+    exception?: any,
   ) {
-    const logMessage = `Error: ${
-      typeof message === 'object' ? JSON.stringify(message) : message
-    } \n ${request.method} ${request.url} \n Status: ${status}`;
+    let message: string;
+    let stack: string | undefined;
+
+    if (exception instanceof Error) {
+      message = exception.message;
+      stack = exception.stack;
+    } else {
+      message = String(exception);
+      stack = 'No stack trace available';
+    }
+
+    const logMessage = `
+    Status: ${status} \n 
+    Error: ${typeof errors === 'object' ? JSON.stringify(errors) : errors} \n 
+    Request: ${request.method} ${request.url} \n 
+    Message: ${message} \n`;
 
     if (status >= Number(HttpStatus.INTERNAL_SERVER_ERROR)) {
       this.logger.error(logMessage, stack, HttpExceptionFilter.name);
+    } else if (status >= 400 && status < 500) {
+      this.logger.warn(logMessage);
     } else {
-      this.logger.warn(logMessage, exception);
+      this.logger.warn(logMessage, stack, exception);
     }
   }
 }
