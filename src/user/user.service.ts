@@ -8,7 +8,7 @@ import {
   FindAllResponse,
   SaveResponse,
   FindOneResponse,
-} from 'utils/common/interfaces/api-response.interface';
+} from 'utils/interfaces/api-response.interface';
 
 @Injectable()
 export class UserService {
